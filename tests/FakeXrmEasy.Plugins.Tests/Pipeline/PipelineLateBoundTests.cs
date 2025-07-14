@@ -107,7 +107,7 @@ namespace FakeXrmEasy.Plugins.Tests.Pipeline
                 EntityLogicalName = Contact.EntityLogicalName,
                 Stage = ProcessingStepStage.Postoperation
             });
-            
+
             // Act
             _service.Delete(Contact.EntityLogicalName, _contact.Id);
 
@@ -250,7 +250,7 @@ namespace FakeXrmEasy.Plugins.Tests.Pipeline
             Assert.Contains($"Entity Logical Name: {Contact.EntityLogicalName}", trace);
             Assert.Contains($"Entity ID: {_contact.Id}", trace);
         }
-        
+
         [Fact]
         public void Should_trigger_plugin_in_the_pre_operation_stage_sync_when_plugin_step_is_registered()
         {
@@ -288,7 +288,7 @@ namespace FakeXrmEasy.Plugins.Tests.Pipeline
                 Stage = ProcessingStepStage.Postoperation,
                 Mode = ProcessingStepMode.Synchronous
             });
-            
+
             // Act
             _service.Create(_contact);
 
@@ -402,7 +402,7 @@ namespace FakeXrmEasy.Plugins.Tests.Pipeline
                 Mode = ProcessingStepMode.Synchronous,
                 FilteringAttributes = new string[] { attributeName }
             });
-            
+
             // Act
             var target = new Account
             {
@@ -488,5 +488,48 @@ namespace FakeXrmEasy.Plugins.Tests.Pipeline
 
 
 
+        [Fact]
+        public void Should_trigger_other_preoperation_plugins_with_higher_rank()
+        {
+            _context.Initialize(_account);
+            _context.RegisterPluginStep<Plugin1>(new PluginStepDefinition()
+            {
+                MessageName = "Update",
+                EntityLogicalName = Account.EntityLogicalName,
+                Stage = ProcessingStepStage.Preoperation,
+                Mode = ProcessingStepMode.Synchronous,
+                FilteringAttributes = new string[] { "name" },
+                Rank = 1
+            });
+
+            _context.RegisterPluginStep<Plugin2>(new PluginStepDefinition()
+            {
+                MessageName = "Update",
+                EntityLogicalName = Account.EntityLogicalName,
+                Stage = ProcessingStepStage.Preoperation,
+                Mode = ProcessingStepMode.Synchronous,
+                FilteringAttributes = new string[] { "ownerid", "telephone1" },
+                Rank = 2
+            });
+
+            // Act
+            var target = new Account
+            {
+                Id = _account.Id,
+                Name = "name"
+            };
+
+            _service.Update(target);
+
+            // Assert
+            var trace = _context.GetTracingService().DumpTrace().Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.Equal(10, trace.Length);
+            Assert.Contains("Message Name: Update", trace);
+            Assert.Contains("Stage: 20", trace);
+            Assert.Contains("Mode: 0", trace);
+            Assert.Contains($"Entity Logical Name: {Account.EntityLogicalName}", trace);
+            Assert.Contains($"Entity ID: {_account.Id}", trace);
+        }
     }
 }
